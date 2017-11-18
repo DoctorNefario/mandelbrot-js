@@ -28,7 +28,9 @@ function getColor(number, maxNumber, colorPalette) {
 
     return new HSL(finalH, finalS, finalV);
 }
+
 const log2 = Math.log(2);
+
 function findEscapeForValue(startR, startI, maxSteps, maxDist) {
     let curRS = startR * startR;
     let curIS = startI * startI;
@@ -67,23 +69,35 @@ function colorTest() {
     const ctx = elem.getContext("2d");
 
     console.log(window.innerWidth, window.innerHeight, elem.width, elem.height);
-    
+
     let r;
     let i;
 
     let curReal;
     let curImaginary;
 
-    // elem.width = window.innerWidth;
-    // elem.height = window.innerHeight;
+    elem.width = window.innerWidth;
+    elem.height = window.innerHeight;
 
-    elem.width = 1000;
-    elem.height = 1000;
+    // elem.width = 1000;
+    // elem.height = 1000;
 
     let leftEdge = -2.25;
     let rightEdge = 0.75;
     let bottomEdge = -1.5;
     let topEdge = 1.5;
+
+    let midReal = (leftEdge + rightEdge) / 2;
+    let midImaginary = (bottomEdge + topEdge) / 2;
+
+    if (elem.width > elem.height) {
+        leftEdge = (leftEdge - midReal) * (elem.width / elem.height) + midReal;
+        rightEdge = (rightEdge - midReal) * (elem.width / elem.height) + midReal;
+    }
+    if (elem.height > elem.width) {
+        bottomEdge = (bottomEdge - midImaginary) * (elem.height / elem.width) + midImaginary;
+        topEdge = (topEdge - midImaginary) * (elem.height / elem.width) + midImaginary;
+    }
 
     let realRange = rightEdge - leftEdge;
     let imaginaryRange = topEdge - bottomEdge;
@@ -92,7 +106,7 @@ function colorTest() {
     let distLimit = 3;
     let distLimitSquared = distLimit * distLimit;
 
-    console.log(elem, ctx);
+    console.log(elem, ctx, elem.width, elem.height);
 
     // for (i = 0; i < elem.width; ++i) {
     //     iColor = getColor(i, elem.width - 1, colorPalette);
@@ -103,21 +117,38 @@ function colorTest() {
     let highest = 0;
     let lowest = maxSteps;
 
+    console.time("test");
+
     for (r = 0; r < elem.width; ++r) {
         stepGrid.push([]);
         curReal = (r / (elem.width - 1)) * realRange + leftEdge;
         for (i = 0; i < elem.height; ++i) {
             curImaginary = (i / (elem.height - 1)) * imaginaryRange + bottomEdge;
+
             const stepsTaken = findEscapeForValue(curReal, curImaginary, maxSteps, distLimitSquared);
-            const c = getColor(stepsTaken, maxSteps, colorPalette);
-            ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-            ctx.fillRect(r, i, 1, 1);
+            // const c = getColor(stepsTaken, maxSteps, colorPalette);
+
+            // ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            // ctx.fillRect(r, i, 1, 1);
+
             stepGrid[r].push(stepsTaken);
+
             if (stepsTaken < lowest) {
                 lowest = stepsTaken;
             } else if (stepsTaken > highest) {
                 highest = stepsTaken;
             }
+        }
+    }
+    console.timeEnd("test");
+
+    let x;
+    let y;
+    for (x = 0; x < elem.width; ++x) {
+        for (y = 0; y < elem.height; ++y) {
+            const c = getColor(stepGrid[x][y], highest - 10, colorPalette);
+            ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            ctx.fillRect(x, y, 1, 1);
         }
     }
 
