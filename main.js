@@ -9,7 +9,8 @@ function getColor(number, maxNumber, colorPalette) {
     if (number === maxNumber) {
         return colorPalette[colorPalette.length - 1];
     } else if (number > maxNumber || number < 0) {
-        return new HSL(0, 0, 0);
+        // return new HSL(0, 0, 0);
+        return new HSL(10, 10, 10);
     }
 
     const normalized = number / maxNumber;
@@ -47,6 +48,10 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
 
     let step = maxSteps - stepsLeft;
 
+    // return step;
+
+    if (step === maxSteps) return step;
+
     let mu = step + 1 - Math.log(Math.log(Math.sqrt(curR * curR + curI * curI))) / log2;
 
     if (isNaN(mu) || mu < 0) mu = 0;
@@ -64,11 +69,11 @@ console.log(getColor(1, 3, colorPalette));
 
 let stepGrid = [];
 
-function colorTest() {
-    const elem = document.getElementById("mandelbrot-canvas");
-    const ctx = elem.getContext("2d");
+let globalElem, globalCtx;
+let leftEdge, rightEdge, bottomEdge, topEdge, midReal, midImaginary, realRange, imaginaryRange;
 
-    console.log(window.innerWidth, window.innerHeight, elem.width, elem.height);
+function drawSet() {
+    console.log(window.innerWidth, window.innerHeight, globalElem.width, globalElem.height);
 
     let r;
     let i;
@@ -76,37 +81,37 @@ function colorTest() {
     let curReal;
     let curImaginary;
 
-    elem.width = window.innerWidth;
-    elem.height = window.innerHeight;
+    globalElem.width = window.innerWidth;
+    globalElem.height = window.innerHeight;
 
     // elem.width = 1000;
     // elem.height = 1000;
 
-    let leftEdge = -2.25;
-    let rightEdge = 0.75;
-    let bottomEdge = -1.5;
-    let topEdge = 1.5;
+    leftEdge = -2.25;
+    rightEdge = 0.75;
+    bottomEdge = -1.5;
+    topEdge = 1.5;
 
-    let midReal = (leftEdge + rightEdge) / 2;
-    let midImaginary = (bottomEdge + topEdge) / 2;
+    midReal = (leftEdge + rightEdge) / 2;
+    midImaginary = (bottomEdge + topEdge) / 2;
 
-    if (elem.width > elem.height) {
-        leftEdge = (leftEdge - midReal) * (elem.width / elem.height) + midReal;
-        rightEdge = (rightEdge - midReal) * (elem.width / elem.height) + midReal;
+    if (globalElem.width > globalElem.height) {
+        leftEdge = (leftEdge - midReal) * (globalElem.width / globalElem.height) + midReal;
+        rightEdge = (rightEdge - midReal) * (globalElem.width / globalElem.height) + midReal;
     }
-    if (elem.height > elem.width) {
-        bottomEdge = (bottomEdge - midImaginary) * (elem.height / elem.width) + midImaginary;
-        topEdge = (topEdge - midImaginary) * (elem.height / elem.width) + midImaginary;
+    if (globalElem.height > globalElem.width) {
+        bottomEdge = (bottomEdge - midImaginary) * (globalElem.height / globalElem.width) + midImaginary;
+        topEdge = (topEdge - midImaginary) * (globalElem.height / globalElem.width) + midImaginary;
     }
 
-    let realRange = rightEdge - leftEdge;
-    let imaginaryRange = topEdge - bottomEdge;
+    realRange = rightEdge - leftEdge;
+    imaginaryRange = topEdge - bottomEdge;
 
     let maxSteps = 50;
     let distLimit = 3;
     let distLimitSquared = distLimit * distLimit;
 
-    console.log(elem, ctx, elem.width, elem.height);
+    console.log(globalElem, globalCtx, globalElem.width, globalElem.height);
 
     // for (i = 0; i < elem.width; ++i) {
     //     iColor = getColor(i, elem.width - 1, colorPalette);
@@ -114,44 +119,70 @@ function colorTest() {
     //     ctx.fillRect(i, 0, 1, elem.height);
     // }
 
-    let highest = 0;
-    let lowest = maxSteps;
+    // let highest = 0;
+    // let lowest = maxSteps;
 
     console.time("test");
 
-    for (r = 0; r < elem.width; ++r) {
+    for (r = 0; r < globalElem.width; ++r) {
         stepGrid.push([]);
-        curReal = (r / (elem.width - 1)) * realRange + leftEdge;
-        for (i = 0; i < elem.height; ++i) {
-            curImaginary = (i / (elem.height - 1)) * imaginaryRange + bottomEdge;
+        curReal = (r / (globalElem.width - 1)) * realRange + leftEdge;
+        for (i = 0; i < globalElem.height; ++i) {
+            curImaginary = (i / (globalElem.height - 1)) * imaginaryRange + bottomEdge;
 
             const stepsTaken = findEscapeForValue(curReal, curImaginary, maxSteps, distLimitSquared);
-            // const c = getColor(stepsTaken, maxSteps, colorPalette);
+            const c = getColor(stepsTaken, maxSteps, colorPalette);
 
-            // ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-            // ctx.fillRect(r, i, 1, 1);
+            globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            globalCtx.fillRect(r, i, 1, 1);
 
             stepGrid[r].push(stepsTaken);
 
-            if (stepsTaken < lowest) {
-                lowest = stepsTaken;
-            } else if (stepsTaken > highest) {
-                highest = stepsTaken;
-            }
+            // if (stepsTaken < lowest) {
+            //     lowest = stepsTaken;
+            // } else if (stepsTaken > highest) {
+            //     highest = stepsTaken;
+            // }
         }
     }
     console.timeEnd("test");
 
-    let x;
-    let y;
-    for (x = 0; x < elem.width; ++x) {
-        for (y = 0; y < elem.height; ++y) {
-            const c = getColor(stepGrid[x][y], highest - 10, colorPalette);
-            ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-            ctx.fillRect(x, y, 1, 1);
-        }
-    }
+    // let x;
+    // let y;
+    // for (x = 0; x < elem.width; ++x) {
+    //     for (y = 0; y < elem.height; ++y) {
+    //         const c = getColor(stepGrid[x][y], highest, colorPalette);
+    //         ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+    //         ctx.fillRect(x, y, 1, 1);
+    //     }
+    // }
 
-    console.log(stepGrid, lowest, highest);
+    // console.log(stepGrid, lowest, highest);
 
+}
+
+let mouseDownX;
+let mouseDownY;
+
+function mouseDownCallback(e) {
+    console.log(e.clientX, e.clientY);
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
+}
+
+function mouseUpCallback(e) {
+    let newWidth = Math.abs(mouseDownX - e.clientX);
+    let newHeight = Math.abs(mouseDownY - e.clientY);
+    console.log(newWidth, newHeight);
+
+}
+
+function init() {
+    globalElem = document.getElementById("mandelbrot-canvas");
+    globalCtx = globalElem.getContext("2d");
+
+    globalElem.addEventListener("mousedown", mouseDownCallback);
+    globalElem.addEventListener("mouseup", mouseUpCallback);
+
+    drawSet();
 }
