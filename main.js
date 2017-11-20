@@ -10,7 +10,8 @@ function getColor(number, maxNumber, colorPalette) {
         return colorPalette[colorPalette.length - 1];
     } else if (number > maxNumber || number < 0) {
         // return new HSL(0, 0, 0);
-        return new HSL(10, 10, 10);
+        // Fluro pink, to make errors obvious
+        return new HSL(322, 96, 47);
     }
 
     const normalized = number / maxNumber;
@@ -66,33 +67,111 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
 // Between 0 and 360, between 0 and 100, between 0 and 100
 let colorPalette = [new HSL(120, 0, 0), new HSL(120, 100, 50), new HSL(240, 100, 50), new HSL(240, 100, 0)];
 
-console.log(getColor(2, 4, colorPalette));
-console.log(getColor(2.5, 5, colorPalette));
-console.log(getColor(1, 3, colorPalette));
-
-// let stepGrid = [];
-
 let globalElem, globalCtx;
 let leftEdge, rightEdge, bottomEdge, topEdge, midReal, midImaginary, realRange, imaginaryRange;
 
-let maxSteps = 50;
+let maxSteps = 20;
 let distLimit = 3;
 let distLimitSquared = distLimit * distLimit;
 
 function drawSet() {
-    console.log(window.innerWidth, window.innerHeight, globalElem.width, globalElem.height);
-
     let r;
     let i;
 
     let curReal;
     let curImaginary;
 
+    console.time("Draw time");
+
+    for (r = 0; r < globalElem.width; ++r) {
+        curReal = (r / (globalElem.width - 1)) * realRange + leftEdge;
+        for (i = 0; i < globalElem.height; ++i) {
+            curImaginary = (i / (globalElem.height - 1)) * imaginaryRange + bottomEdge;
+
+            const stepsTaken = findEscapeForValue(curReal, curImaginary, maxSteps, distLimitSquared);
+            if (stepsTaken[1]) {
+                const c = getColor(stepsTaken[0], maxSteps, colorPalette);
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            } else {
+                const c = colorPalette[colorPalette.length - 1];
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            }
+
+            globalCtx.fillRect(r, i, 1, 1);
+        }
+    }
+
+    console.timeEnd("Draw time");
+}
+
+let mouseDownX;
+let mouseDownY;
+
+function mouseDownCallback(e) {
+    mouseDownX = e.clientX;
+    mouseDownY = e.clientY;
+}
+
+function mouseUpCallback(e) {
+    let newWidthPx = Math.abs(mouseDownX - e.clientX);
+    let newHeightPx = Math.abs(mouseDownY - e.clientY);
+
+    let oldRealRange = realRange;
+    let oldImaginaryRange = imaginaryRange;
+
+    if (newWidthPx === 0 && newHeightPx === 0) {
+        return;
+    }
+
+    let leftEdgePx = mouseDownX < e.clientX ? mouseDownX : e.clientX;
+    let bottomEdgePx = mouseDownY < e.clientY ? mouseDownY : e.clientY;
+    rightEdge = ((leftEdgePx + newWidthPx) / globalElem.width) * realRange + leftEdge;
+    topEdge = ((bottomEdgePx + newHeightPx) / globalElem.height) * imaginaryRange + bottomEdge;
+    leftEdge = (leftEdgePx / globalElem.width) * realRange + leftEdge;
+    bottomEdge = (bottomEdgePx / globalElem.height) * imaginaryRange + bottomEdge;
+
+    realRange = rightEdge - leftEdge;
+    imaginaryRange = topEdge - bottomEdge;
+
+    let realRangeRatio = realRange / oldRealRange;
+    let imaginaryRangeRatio = imaginaryRange / oldImaginaryRange;
+
+    if (realRangeRatio > imaginaryRangeRatio) {
+        let imaginaryRangeDiff = realRange * (oldImaginaryRange / oldRealRange) - imaginaryRange;
+
+        topEdge += imaginaryRangeDiff / 2;
+        bottomEdge -= imaginaryRangeDiff / 2;
+
+        imaginaryRange = topEdge - bottomEdge;
+    } else if (imaginaryRangeRatio > realRangeRatio) {
+        let realRangeDiff = imaginaryRange * (oldRealRange / oldImaginaryRange) - realRange;
+
+        rightEdge += realRangeDiff / 2;
+        leftEdge -= realRangeDiff / 2;
+
+        realRange = rightEdge - leftEdge;
+    }
+
+    drawSet();
+}
+
+function init() {
+    globalElem = document.getElementById("mandelbrot-canvas");
+    globalCtx = globalElem.getContext("2d");
+
+    globalElem.addEventListener("mousedown", mouseDownCallback);
+    globalElem.addEventListener("mouseup", mouseUpCallback);
+
+    leftEdge = -2.25;
+    rightEdge = 0.75;
+    bottomEdge = -1.5;
+    topEdge = 1.5;
+
     globalElem.width = window.innerWidth;
     globalElem.height = window.innerHeight;
 
-    // elem.width = 1000;
-    // elem.height = 1000;
+    // globalElem.width = 1000;
+    // globalElem.height = 1000;
 
     midReal = (leftEdge + rightEdge) / 2;
     midImaginary = (bottomEdge + topEdge) / 2;
@@ -108,102 +187,6 @@ function drawSet() {
 
     realRange = rightEdge - leftEdge;
     imaginaryRange = topEdge - bottomEdge;
-
-    console.log(globalElem, globalCtx, globalElem.width, globalElem.height);
-
-    // for (i = 0; i < elem.width; ++i) {
-    //     iColor = getColor(i, elem.width - 1, colorPalette);
-    //     ctx.fillStyle = "hsl(" + iColor.h + "," + iColor.s + "%," + iColor.l + "%)";
-    //     ctx.fillRect(i, 0, 1, elem.height);
-    // }
-
-    // let highest = 0;
-    // let lowest = maxSteps;
-
-    console.time("test");
-
-    for (r = 0; r < globalElem.width; ++r) {
-        // stepGrid.push([]);
-        curReal = (r / (globalElem.width - 1)) * realRange + leftEdge;
-        for (i = 0; i < globalElem.height; ++i) {
-            curImaginary = (i / (globalElem.height - 1)) * imaginaryRange + bottomEdge;
-
-            const stepsTaken = findEscapeForValue(curReal, curImaginary, maxSteps, distLimitSquared);
-            if (stepsTaken[1]) {
-                const c = getColor(stepsTaken[0], maxSteps, colorPalette);
-                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-            } else {
-                const c = colorPalette[colorPalette.length - 1];
-                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-            }
-
-            globalCtx.fillRect(r, i, 1, 1);
-
-            // stepGrid[r].push(stepsTaken);
-
-            // if (stepsTaken < lowest) {
-            //     lowest = stepsTaken;
-            // } else if (stepsTaken > highest) {
-            //     highest = stepsTaken;
-            // }
-        }
-    }
-    console.timeEnd("test");
-
-    // let x;
-    // let y;
-    // for (x = 0; x < elem.width; ++x) {
-    //     for (y = 0; y < elem.height; ++y) {
-    //         const c = getColor(stepGrid[x][y], highest, colorPalette);
-    //         ctx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-    //         ctx.fillRect(x, y, 1, 1);
-    //     }
-    // }
-
-    // console.log(stepGrid, lowest, highest);
-
-}
-
-let mouseDownX;
-let mouseDownY;
-
-function mouseDownCallback(e) {
-    console.log(e.clientX, e.clientY);
-    mouseDownX = e.clientX;
-    mouseDownY = e.clientY;
-}
-
-function mouseUpCallback(e) {
-    let newWidthPx = Math.abs(mouseDownX - e.clientX);
-    let newHeightPx = Math.abs(mouseDownY - e.clientY);
-    console.log(newWidthPx, newHeightPx);
-    if (newWidthPx === 0 || newHeightPx === 0) {
-        return;
-    }
-    let leftEdgePx = mouseDownX < e.clientX ? mouseDownX : e.clientX;
-    let bottomEdgePx = mouseDownY < e.clientY ? mouseDownY : e.clientY;
-    rightEdge = ((leftEdgePx + newWidthPx) / globalElem.width) * realRange + leftEdge;
-    topEdge = ((bottomEdgePx + newHeightPx) / globalElem.height) * imaginaryRange + bottomEdge;
-    leftEdge = (leftEdgePx / globalElem.width) * realRange + leftEdge;
-    bottomEdge = (bottomEdgePx / globalElem.height) * imaginaryRange + bottomEdge;
-
-    realRange = rightEdge - leftEdge;
-    imaginaryRange = topEdge - bottomEdge;
-
-    drawSet()
-}
-
-function init() {
-    globalElem = document.getElementById("mandelbrot-canvas");
-    globalCtx = globalElem.getContext("2d");
-
-    globalElem.addEventListener("mousedown", mouseDownCallback);
-    globalElem.addEventListener("mouseup", mouseUpCallback);
-
-    leftEdge = -2.25;
-    rightEdge = 0.75;
-    bottomEdge = -1.5;
-    topEdge = 1.5;
 
     drawSet();
 }
