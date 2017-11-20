@@ -46,6 +46,9 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
         curR = curRS - curIS + startR;
     }
 
+    if (stepsLeft === 0) return [maxSteps, false];
+
+
     let step = maxSteps - stepsLeft;
 
     // return step;
@@ -56,7 +59,7 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
 
     if (isNaN(mu) || mu < 0) mu = 0;
 
-    return mu;
+    return [mu, true];
 }
 
 // HSL
@@ -67,10 +70,14 @@ console.log(getColor(2, 4, colorPalette));
 console.log(getColor(2.5, 5, colorPalette));
 console.log(getColor(1, 3, colorPalette));
 
-let stepGrid = [];
+// let stepGrid = [];
 
 let globalElem, globalCtx;
 let leftEdge, rightEdge, bottomEdge, topEdge, midReal, midImaginary, realRange, imaginaryRange;
+
+let maxSteps = 50;
+let distLimit = 3;
+let distLimitSquared = distLimit * distLimit;
 
 function drawSet() {
     console.log(window.innerWidth, window.innerHeight, globalElem.width, globalElem.height);
@@ -87,11 +94,6 @@ function drawSet() {
     // elem.width = 1000;
     // elem.height = 1000;
 
-    leftEdge = -2.25;
-    rightEdge = 0.75;
-    bottomEdge = -1.5;
-    topEdge = 1.5;
-
     midReal = (leftEdge + rightEdge) / 2;
     midImaginary = (bottomEdge + topEdge) / 2;
 
@@ -107,10 +109,6 @@ function drawSet() {
     realRange = rightEdge - leftEdge;
     imaginaryRange = topEdge - bottomEdge;
 
-    let maxSteps = 50;
-    let distLimit = 3;
-    let distLimitSquared = distLimit * distLimit;
-
     console.log(globalElem, globalCtx, globalElem.width, globalElem.height);
 
     // for (i = 0; i < elem.width; ++i) {
@@ -125,18 +123,23 @@ function drawSet() {
     console.time("test");
 
     for (r = 0; r < globalElem.width; ++r) {
-        stepGrid.push([]);
+        // stepGrid.push([]);
         curReal = (r / (globalElem.width - 1)) * realRange + leftEdge;
         for (i = 0; i < globalElem.height; ++i) {
             curImaginary = (i / (globalElem.height - 1)) * imaginaryRange + bottomEdge;
 
             const stepsTaken = findEscapeForValue(curReal, curImaginary, maxSteps, distLimitSquared);
-            const c = getColor(stepsTaken, maxSteps, colorPalette);
+            if (stepsTaken[1]) {
+                const c = getColor(stepsTaken[0], maxSteps, colorPalette);
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            } else {
+                const c = colorPalette[colorPalette.length - 1];
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            }
 
-            globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
             globalCtx.fillRect(r, i, 1, 1);
 
-            stepGrid[r].push(stepsTaken);
+            // stepGrid[r].push(stepsTaken);
 
             // if (stepsTaken < lowest) {
             //     lowest = stepsTaken;
@@ -171,10 +174,23 @@ function mouseDownCallback(e) {
 }
 
 function mouseUpCallback(e) {
-    let newWidth = Math.abs(mouseDownX - e.clientX);
-    let newHeight = Math.abs(mouseDownY - e.clientY);
-    console.log(newWidth, newHeight);
+    let newWidthPx = Math.abs(mouseDownX - e.clientX);
+    let newHeightPx = Math.abs(mouseDownY - e.clientY);
+    console.log(newWidthPx, newHeightPx);
+    if (newWidthPx === 0 || newHeightPx === 0) {
+        return;
+    }
+    let leftEdgePx = mouseDownX < e.clientX ? mouseDownX : e.clientX;
+    let bottomEdgePx = mouseDownY < e.clientY ? mouseDownY : e.clientY;
+    rightEdge = ((leftEdgePx + newWidthPx) / globalElem.width) * realRange + leftEdge;
+    topEdge = ((bottomEdgePx + newHeightPx) / globalElem.height) * imaginaryRange + bottomEdge;
+    leftEdge = (leftEdgePx / globalElem.width) * realRange + leftEdge;
+    bottomEdge = (bottomEdgePx / globalElem.height) * imaginaryRange + bottomEdge;
 
+    realRange = rightEdge - leftEdge;
+    imaginaryRange = topEdge - bottomEdge;
+
+    drawSet()
 }
 
 function init() {
@@ -183,6 +199,11 @@ function init() {
 
     globalElem.addEventListener("mousedown", mouseDownCallback);
     globalElem.addEventListener("mouseup", mouseUpCallback);
+
+    leftEdge = -2.25;
+    rightEdge = 0.75;
+    bottomEdge = -1.5;
+    topEdge = 1.5;
 
     drawSet();
 }
