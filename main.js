@@ -4,6 +4,32 @@ function HSL(h, s, l) {
     this.l = l;
 }
 
+// Credit: https://stackoverflow.com/a/9493060
+function hslToRgb(h, s, l){
+    let r, g, b;
+
+    if(s === 0){
+        r = g = b = l; // achromatic
+    }else{
+        const hue2rgb = function hue2rgb(p, q, t) {
+            if (t < 0) t += 1;
+            if (t > 1) t -= 1;
+            if (t < 1 / 6) return p + (q - p) * 6 * t;
+            if (t < 1 / 2) return q;
+            if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+            return p;
+        };
+
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+    }
+
+    return {r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255)};
+}
+
 // Takes color as HSL, returns it as RGB
 function getColor(number, maxNumber, colorPalette) {
     if (number === maxNumber) {
@@ -58,7 +84,11 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
 
     let mu = step + 1 - Math.log(Math.log(Math.sqrt(curR * curR + curI * curI))) / log2;
 
-    if (isNaN(mu) || mu < 0) mu = 0;
+    // let log_zn = Math.log(curR * curR + curI * curI) / 2;
+    // let nu = Math.log(log_zn / log2) / log2;
+    // let mu = step + 1 - nu;
+
+    if (mu < 0) mu = 0;
 
     return [mu, true];
 }
@@ -81,7 +111,7 @@ function drawSet() {
     let curReal;
     let curImaginary;
 
-    console.time("Draw time");
+    /*console.time("Draw time");
 
     for (r = 0; r < globalElem.width; ++r) {
         curReal = (r / (globalElem.width - 1)) * realRange + leftEdge;
@@ -101,7 +131,78 @@ function drawSet() {
         }
     }
 
-    console.timeEnd("Draw time");
+    console.timeEnd("Draw time");*/
+
+
+    let temp = [
+        {x: 0, y: 0, l: -2.25, b: -1.5},
+        {x: 500, y: 0, l: -0.75, b: -1.5},
+        {x: 0, y: 500, l: -2.25, b: 0},
+        {x: 500, y: 500, l: -0.75, b: 0}
+    ];
+    for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
+        workerArray.push(new Worker("worker.js"));
+        workerArray[i].onmessage = function (e) {
+            /*console.log(e.data);
+            for (let x = 0; x < e.data.arr.length; ++x) {
+                let writeText = "";
+                if (x < 10) writeText += "0";
+                writeText += x + "|";
+                for (let y = 0; y < e.data.arr[x].length; ++y) {
+                    if (e.data.arr[x][y] % 1 === 0) {
+                        writeText += "1";
+                    } else {
+                        writeText += "0";
+                    }
+                }
+                console.log(writeText);
+            }*/
+            console.log("Received data");
+
+            let d = e.data;
+            let a = d.arr;
+
+            let imageData = globalCtx.createImageData(d.pxW, d.pxH);
+            for (let y = 0; y < d.pxH; ++y) {
+                for (let x = 0; x < d.pxW; ++x) {
+                    /*if (d.colored) {
+                        const c = a[y][x];
+                        globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+                    } else {
+                        const c = getColor(a[y][x], d.maxSteps, colorPalette);
+                        globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+                    }
+                    globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);*/
+                    const c = getColor(a[y][x], d.maxSteps, colorPalette);
+                    const rgb = hslToRgb(c.h / 360, c.s / 100, c.l / 100);
+                    const curOffset = y * d.pxW * 4 + x * 4;
+                    imageData.data[curOffset] = rgb.r;
+                    imageData.data[curOffset + 1] = rgb.g;
+                    imageData.data[curOffset + 2] = rgb.b;
+                    imageData.data[curOffset + 3] = 255;
+                    // globalCtx.fillStyle = "rgb(" + rgb.r + "," + rgb.g + "," + rgb.b + ")";
+                    // globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);
+                }
+            }
+            globalCtx.putImageData(imageData, d.startX, d.startY);
+        };
+
+        let t = temp[i];
+        let message = {
+            returnColor: false,
+            maxSteps: 18,
+            maxDistSquared: 10000,
+            leftEdge: t.l,
+            bottomEdge: t.b,
+            rangeR: 1.5,
+            rangeI: 1.5,
+            pxW: 500,
+            pxH: 500,
+            startX: t.x,
+            startY: t.y
+        };
+        workerArray[i].postMessage(message);
+    }
 }
 
 let mouseDownX;
@@ -155,6 +256,8 @@ function mouseUpCallback(e) {
     drawSet();
 }
 
+let workerArray = [];
+
 function init() {
     globalElem = document.getElementById("mandelbrot-canvas");
     globalCtx = globalElem.getContext("2d");
@@ -169,6 +272,8 @@ function init() {
 
     globalElem.width = window.innerWidth;
     globalElem.height = window.innerHeight;
+
+    console.log("Available cores: ", navigator.hardwareConcurrency);
 
     // globalElem.width = 1000;
     // globalElem.height = 1000;
