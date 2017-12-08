@@ -1,4 +1,5 @@
 let maxSteps, maxDist2, leftEdge, bottomEdge, rangeR, rangeI, pxW, pxH;
+let workerId = -1;
 
 const log2 = Math.log(2);
 
@@ -60,23 +61,27 @@ function t() {
 
 onmessage = function(e) {
     let calcInfo = e.data;
-    maxSteps = calcInfo.maxSteps;
-    maxDist2 = calcInfo.maxDistSquared;
-    leftEdge = calcInfo.leftEdge;
-    bottomEdge = calcInfo.bottomEdge;
-    rangeR = calcInfo.rangeR;
-    rangeI = calcInfo.rangeI;
-    pxW = calcInfo.pxW;
-    pxH = calcInfo.pxH;
-    let temp = {
-        colored: calcInfo.returnColor,
-        maxSteps: maxSteps,
-        startX: calcInfo.startX,
-        startY: calcInfo.startY,
-        pxW: pxW,
-        pxH: pxH,
-        arr: t()
-    };
-    console.log("Finished calculation");
-    postMessage(temp);
+    if (isNaN(calcInfo)) {
+        maxSteps = calcInfo.maxSteps;
+        maxDist2 = calcInfo.maxDistSquared;
+        leftEdge = calcInfo.leftEdge;
+        bottomEdge = calcInfo.bottomEdge;
+        rangeR = calcInfo.rangeR;
+        rangeI = calcInfo.rangeI;
+        pxW = calcInfo.pxW;
+        pxH = calcInfo.pxH;
+        let returnData = {
+            colored: calcInfo.returnColor,
+            maxSteps: maxSteps,
+            startX: calcInfo.startX,
+            startY: calcInfo.startY,
+            pxW: pxW,
+            pxH: pxH,
+            workerId: workerId,
+            arr: t()
+        };
+        postMessage(returnData);
+    } else {
+        workerId = calcInfo;
+    }
 };

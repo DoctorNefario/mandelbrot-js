@@ -4,13 +4,58 @@ function HSL(h, s, l) {
     this.l = l;
 }
 
+function WorkerInstructions(startX, startY, leftEdge, bottomEdge, realRange, imaginaryRange,
+                            pixelsWidth, pixelsHeight) {
+    this.returnColor = false;
+    this.maxSteps = maxSteps;
+    this.maxDistSquared = distLimitSquared;
+    this.startX = startX;
+    this.startY = startY;
+    this.leftEdge = leftEdge;
+    this.bottomEdge = bottomEdge;
+    this.rangeR = realRange;
+    this.rangeI = imaginaryRange;
+    this.pxW = pixelsWidth;
+    this.pxH = pixelsHeight;
+}
+
+// Spiral selector, ported from Python
+// Credit: https://stackoverflow.com/a/398302
+function spiral(spiralW, spiralH) {
+    let [x, y, dx, dy] = [0, 0, 0, -1];
+    let max = Math.max(spiralW, spiralH) ** 2;
+    let [halfSpiralX, halfSpiralY] = [spiralW / 2, spiralH / 2];
+
+    let pointArray = [];
+    for (let i = 0; i < max; ++i) {
+        // if ((-halfSpiralX < x <= halfSpiralX) && (-halfSpiralY < y <= halfSpiralY)) {
+        if ((-spiralW / 2 < x && x <= spiralW / 2) && (-spiralH / 2 < y && y <= spiralH / 2)) {
+            let startX = (x + halfSpiralX - 1) * drawWidth;
+            let startY = (y + halfSpiralY - 1) * drawHeight;
+            let width = startX + drawWidth > globalElem.width && drawWidthDiff > 0 ? drawWidthDiff : drawWidth;
+            let height = startY + drawHeight > globalElem.height && drawHeightDiff > 0 ? drawHeightDiff : drawHeight;
+
+            pointArray.push({
+                x: startX, y: startY, pxW: width, pxH: height,
+                l: (startX / globalElem.width) * realRange + leftEdge,
+                b: (startY / globalElem.height) * imaginaryRange + bottomEdge,
+                rR: (width / globalElem.width) * realRange,
+                rI: (height / globalElem.height) * imaginaryRange
+            });
+        }
+        if (x === y || (x < 0 && x === -y) || (x > 0 && x === 1 - y)) [dx, dy] = [-dy, dx];
+        [x, y] = [x + dx, y + dy];
+    }
+    return pointArray;
+}
+
 // Credit: https://stackoverflow.com/a/9493060
-function hslToRgb(h, s, l){
+function hslToRgb(h, s, l) {
     let r, g, b;
 
-    if(s === 0){
+    if (s === 0) {
         r = g = b = l; // achromatic
-    }else{
+    } else {
         const hue2rgb = function hue2rgb(p, q, t) {
             if (t < 0) t += 1;
             if (t > 1) t -= 1;
@@ -22,9 +67,9 @@ function hslToRgb(h, s, l){
 
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
         const p = 2 * l - q;
-        r = hue2rgb(p, q, h + 1/3);
+        r = hue2rgb(p, q, h + 1 / 3);
         g = hue2rgb(p, q, h);
-        b = hue2rgb(p, q, h - 1/3);
+        b = hue2rgb(p, q, h - 1 / 3);
     }
 
     return {r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255)};
@@ -57,8 +102,9 @@ function getColor(number, maxNumber, colorPalette) {
     return new HSL(finalH, finalS, finalV);
 }
 
-const log2 = Math.log(2);
+// const log2 = Math.log(2);
 
+/*
 function findEscapeForValue(startR, startI, maxSteps, maxDist) {
     let curRS = startR * startR;
     let curIS = startI * startI;
@@ -92,6 +138,7 @@ function findEscapeForValue(startR, startI, maxSteps, maxDist) {
 
     return [mu, true];
 }
+*/
 
 // HSL
 // Between 0 and 360, between 0 and 100, between 0 and 100
@@ -104,12 +151,19 @@ let maxSteps = 20;
 let distLimit = 3;
 let distLimitSquared = distLimit * distLimit;
 
-function drawSet() {
-    let r;
-    let i;
+let drawWidth, drawHeight, drawWidthDiff, drawHeightDiff;
+drawWidth = drawHeight = 256;
 
-    let curReal;
-    let curImaginary;
+let pointsLeft, pointsDown;
+
+let drawPoints;
+
+function drawSet() {
+    // let r;
+    // let i;
+    //
+    // let curReal;
+    // let curImaginary;
 
     /*console.time("Draw time");
 
@@ -133,76 +187,14 @@ function drawSet() {
 
     console.timeEnd("Draw time");*/
 
-
-    let temp = [
-        {x: 0, y: 0, l: -2.25, b: -1.5},
-        {x: 500, y: 0, l: -0.75, b: -1.5},
-        {x: 0, y: 500, l: -2.25, b: 0},
-        {x: 500, y: 500, l: -0.75, b: 0}
-    ];
-    for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
-        workerArray.push(new Worker("worker.js"));
-        workerArray[i].onmessage = function (e) {
-            /*console.log(e.data);
-            for (let x = 0; x < e.data.arr.length; ++x) {
-                let writeText = "";
-                if (x < 10) writeText += "0";
-                writeText += x + "|";
-                for (let y = 0; y < e.data.arr[x].length; ++y) {
-                    if (e.data.arr[x][y] % 1 === 0) {
-                        writeText += "1";
-                    } else {
-                        writeText += "0";
-                    }
-                }
-                console.log(writeText);
-            }*/
-            console.log("Received data");
-
-            let d = e.data;
-            let a = d.arr;
-
-            let imageData = globalCtx.createImageData(d.pxW, d.pxH);
-            for (let y = 0; y < d.pxH; ++y) {
-                for (let x = 0; x < d.pxW; ++x) {
-                    /*if (d.colored) {
-                        const c = a[y][x];
-                        globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-                    } else {
-                        const c = getColor(a[y][x], d.maxSteps, colorPalette);
-                        globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
-                    }
-                    globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);*/
-                    const c = getColor(a[y][x], d.maxSteps, colorPalette);
-                    const rgb = hslToRgb(c.h / 360, c.s / 100, c.l / 100);
-                    const curOffset = y * d.pxW * 4 + x * 4;
-                    imageData.data[curOffset] = rgb.r;
-                    imageData.data[curOffset + 1] = rgb.g;
-                    imageData.data[curOffset + 2] = rgb.b;
-                    imageData.data[curOffset + 3] = 255;
-                    // globalCtx.fillStyle = "rgb(" + rgb.r + "," + rgb.g + "," + rgb.b + ")";
-                    // globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);
-                }
-            }
-            globalCtx.putImageData(imageData, d.startX, d.startY);
-        };
-
-        let t = temp[i];
-        let message = {
-            returnColor: false,
-            maxSteps: 18,
-            maxDistSquared: 10000,
-            leftEdge: t.l,
-            bottomEdge: t.b,
-            rangeR: 1.5,
-            rangeI: 1.5,
-            pxW: 500,
-            pxH: 500,
-            startX: t.x,
-            startY: t.y
-        };
-        workerArray[i].postMessage(message);
-    }
+    drawPoints = spiral(pointsLeft, pointsDown);
+    workerArray.forEach(function (worker) {
+        if (drawPoints.length > 0) {
+            let t = drawPoints.shift();
+            let message = new WorkerInstructions(t.x, t.y, t.l, t.b, t.rR, t.rI, t.pxW, t.pxH);
+            worker.postMessage(message);
+        }
+    });
 }
 
 let mouseDownX;
@@ -278,6 +270,12 @@ function init() {
     // globalElem.width = 1000;
     // globalElem.height = 1000;
 
+    drawWidthDiff = window.innerWidth % drawWidth;
+    drawHeightDiff = window.innerHeight % drawHeight;
+
+    pointsLeft = Math.ceil(globalElem.width / drawWidth);
+    pointsDown = Math.ceil(globalElem.height / drawHeight);
+
     midReal = (leftEdge + rightEdge) / 2;
     midImaginary = (bottomEdge + topEdge) / 2;
 
@@ -290,8 +288,72 @@ function init() {
         topEdge = (topEdge - midImaginary) * (globalElem.height / globalElem.width) + midImaginary;
     }
 
+    if (workerArray.length > 0) {
+        workerArray.forEach(function (worker) {
+            worker.terminate();
+        });
+        workerArray = [];
+    }
+
+    for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
+        workerArray.push(new Worker("worker.js"));
+        workerArray[i].onmessage = workerCallback;
+        workerArray[i].postMessage(i);
+    }
+
     realRange = rightEdge - leftEdge;
     imaginaryRange = topEdge - bottomEdge;
 
     drawSet();
 }
+
+let workerCallback = function (e) {
+    /*console.log(e.data);
+    for (let x = 0; x < e.data.arr.length; ++x) {
+        let writeText = "";
+        if (x < 10) writeText += "0";
+        writeText += x + "|";
+        for (let y = 0; y < e.data.arr[x].length; ++y) {
+            if (e.data.arr[x][y] % 1 === 0) {
+                writeText += "1";
+            } else {
+                writeText += "0";
+            }
+        }
+        console.log(writeText);
+    }*/
+    let d = e.data;
+    let a = d.arr;
+
+    if (drawPoints.length > 0) {
+        let t = drawPoints.shift();
+        let message = new WorkerInstructions(t.x, t.y, t.l, t.b, t.rR, t.rI, t.pxW, t.pxH);
+        workerArray[d.workerId].postMessage(message);
+    }
+
+    let imageData = globalCtx.createImageData(d.pxW, d.pxH);
+    for (let y = 0; y < d.pxH; ++y) {
+        for (let x = 0; x < d.pxW; ++x) {
+            /*if (d.colored) {
+                const c = a[y][x];
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            } else {
+                const c = getColor(a[y][x], d.maxSteps, colorPalette);
+                globalCtx.fillStyle = "hsl(" + c.h + "," + c.s + "%," + c.l + "%)";
+            }
+            globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);*/
+            const c = getColor(a[y][x], d.maxSteps, colorPalette);
+            const rgb = hslToRgb(c.h / 360, c.s / 100, c.l / 100);
+            const curOffset = y * d.pxW * 4 + x * 4;
+            imageData.data[curOffset] = rgb.r;
+            imageData.data[curOffset + 1] = rgb.g;
+            imageData.data[curOffset + 2] = rgb.b;
+            imageData.data[curOffset + 3] = 255;
+            // globalCtx.fillStyle = "rgb(" + rgb.r + "," + rgb.g + "," + rgb.b + ")";
+            // globalCtx.fillRect(x + d.startX, y + d.startY, 1, 1);
+        }
+    }
+    globalCtx.putImageData(imageData, d.startX, d.startY);
+};
+
+window.onload = init;
