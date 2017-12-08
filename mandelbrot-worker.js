@@ -1,8 +1,9 @@
 let maxSteps, maxDist2, leftEdge, bottomEdge, rangeR, rangeI, pxW, pxH;
-let workerId = -1;
+let workerId = -10;
 
 const log2 = Math.log(2);
 
+// TODO: Change the names of these functions, they were meant to be temporary
 function t2(startR, startI, maxSteps, maxDist) {
     let curRS = startR * startR;
     let curIS = startI * startI;
@@ -61,6 +62,7 @@ function t() {
 
 onmessage = function(e) {
     let calcInfo = e.data;
+    // TODO: Change to switch case and allow multiple types of messages, *cleanly*
     if (isNaN(calcInfo)) {
         maxSteps = calcInfo.maxSteps;
         maxDist2 = calcInfo.maxDistSquared;
