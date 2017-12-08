@@ -1,4 +1,4 @@
-# Mandelbrot-JS
+# mandelbrot.js
 ___
 The Mandelbrot Set implemented in Javascript
 
