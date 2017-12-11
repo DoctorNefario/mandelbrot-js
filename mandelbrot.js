@@ -22,13 +22,15 @@ let pointsLeft, pointsDown;
 
 let drawPoints;
 
-
+// More efficient for the worker to get the color
+let workerDoesColor = true;
 let workerArray = [];
 
 
 function WorkerInstructions(startX, startY, leftEdge, bottomEdge, realRange, imaginaryRange,
                             pixelsWidth, pixelsHeight) {
-    this.returnColor = false;
+    this.messageType = "instructions";
+    this.returnColor = workerDoesColor;
     this.maxSteps = maxSteps;
     this.maxDistSquared = distLimitSquared;
     this.startX = startX;
@@ -39,6 +41,9 @@ function WorkerInstructions(startX, startY, leftEdge, bottomEdge, realRange, ima
     this.rangeI = imaginaryRange;
     this.pxW = pixelsWidth;
     this.pxH = pixelsHeight;
+    if (workerDoesColor) {
+        this.colorPalette = colorPalette;
+    }
 }
 
 // Spiral selector, ported from Python
@@ -71,6 +76,7 @@ function spiral(spiralW, spiralH) {
 }
 
 // Credit: https://stackoverflow.com/a/9493060
+// Takes color as HSL, returns it as RGB
 function hslToRgb(h, s, l) {
     let r, g, b;
 
@@ -96,7 +102,6 @@ function hslToRgb(h, s, l) {
     return {r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255)};
 }
 
-// Takes color as HSL, returns it as RGB
 function getColor(number, maxNumber, colorPalette) {
     // TODO: Allow cycling around the color palette instead of just linear mapping each in order
     if (number === maxNumber) {
@@ -127,6 +132,7 @@ function getColor(number, maxNumber, colorPalette) {
 
 // TODO: Find a better name. This function no longer draws the set
 function drawSet() {
+    console.time("draw");
     drawPoints = spiral(pointsLeft, pointsDown);
     workerArray.forEach(function (worker) {
         if (drawPoints.length > 0) {
@@ -185,7 +191,10 @@ function init() {
     for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
         workerArray.push(new Worker("mandelbrot-worker.js"));
         workerArray[i].onmessage = workerCallback;
-        workerArray[i].postMessage(i);
+        workerArray[i].postMessage({
+            messageType: "identifier",
+            identifier: i
+        });
     }
 
     realRange = rightEdge - leftEdge;
@@ -253,16 +262,23 @@ let workerCallback = function (e) {
         let t = drawPoints.shift();
         let message = new WorkerInstructions(t.x, t.y, t.l, t.b, t.rR, t.rI, t.pxW, t.pxH);
         workerArray[d.workerId].postMessage(message);
+    } else {
+        console.timeEnd("draw");
     }
 
     let imageData = globalCtx.createImageData(d.pxW, d.pxH);
-    for (let y = 0; y < d.pxH; ++y) {
-        for (let x = 0; x < d.pxW; ++x) {
-            if (d.colored) {
-                // TODO: Let the workers find colors instead of main thread
-            } else {
+
+    if (d.colored) {
+        // imageData.data = a.slice();
+        // TODO: Find out why I have to loop through for this to work
+        for (let i = 0; i < a.length; ++i) imageData.data[i] = a[i];
+        // console.log(imageData.data, a);
+    } else {
+        for (let y = 0; y < d.pxH; ++y) {
+            for (let x = 0; x < d.pxW; ++x) {
                 const c = getColor(a[y][x], d.maxSteps, colorPalette);
                 const rgb = hslToRgb(c.h / 360, c.s / 100, c.l / 100);
+
                 const curOffset = y * d.pxW * 4 + x * 4;
                 imageData.data[curOffset] = rgb.r;
                 imageData.data[curOffset + 1] = rgb.g;
@@ -274,4 +290,4 @@ let workerCallback = function (e) {
     globalCtx.putImageData(imageData, d.startX, d.startY);
 };
 
-window.onload = init;
+window.addEventListener("load", init, true);
