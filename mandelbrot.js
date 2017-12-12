@@ -8,12 +8,18 @@ function HSL(h, s, l) {
 // Between 0 and 360, between 0 and 100, between 0 and 100
 let colorPalette = [new HSL(120, 0, 0), new HSL(120, 100, 50), new HSL(240, 100, 50), new HSL(240, 100, 0)];
 
-let globalElem, globalCtx;
+let mandelElem, mandelCtx, mandelControls, mandelMessageContainer, mandelMessageSubcontainer;
 let leftEdge, rightEdge, bottomEdge, topEdge, midReal, midImaginary, realRange, imaginaryRange;
 
 let maxSteps = 20;
 let distLimit = 3;
 let distLimitSquared = distLimit * distLimit;
+
+// Change this with CSS
+const fadeTime = 600;
+let messageTimeout = 2500;
+
+let threadsRunning = 0;
 
 let drawWidth, drawHeight, drawWidthDiff, drawHeightDiff;
 drawWidth = drawHeight = 256;
@@ -22,9 +28,12 @@ let pointsLeft, pointsDown;
 
 let drawPoints;
 
-// More efficient for the worker to get the color
+// Whether or not this is more efficient depends on how much waiting the main thread is doing
 let workerDoesColor = true;
 let workerArray = [];
+
+let mandelMessages = [];
+let fadingMandelMessages = [];
 
 
 function WorkerInstructions(startX, startY, leftEdge, bottomEdge, realRange, imaginaryRange,
@@ -58,15 +67,15 @@ function spiral(spiralW, spiralH) {
         if ((-spiralW / 2 < x && x <= spiralW / 2) && (-spiralH / 2 < y && y <= spiralH / 2)) {
             let startX = (x + halfSpiralX - 1) * drawWidth;
             let startY = (y + halfSpiralY - 1) * drawHeight;
-            let width = startX + drawWidth > globalElem.width && drawWidthDiff > 0 ? drawWidthDiff : drawWidth;
-            let height = startY + drawHeight > globalElem.height && drawHeightDiff > 0 ? drawHeightDiff : drawHeight;
+            let width = startX + drawWidth > mandelElem.width && drawWidthDiff > 0 ? drawWidthDiff : drawWidth;
+            let height = startY + drawHeight > mandelElem.height && drawHeightDiff > 0 ? drawHeightDiff : drawHeight;
 
             pointArray.push({
                 x: startX, y: startY, pxW: width, pxH: height,
-                l: (startX / globalElem.width) * realRange + leftEdge,
-                b: (startY / globalElem.height) * imaginaryRange + bottomEdge,
-                rR: (width / globalElem.width) * realRange,
-                rI: (height / globalElem.height) * imaginaryRange
+                l: (startX / mandelElem.width) * realRange + leftEdge,
+                b: (startY / mandelElem.height) * imaginaryRange + bottomEdge,
+                rR: (width / mandelElem.width) * realRange,
+                rI: (height / mandelElem.height) * imaginaryRange
             });
         }
         if (x === y || (x < 0 && x === -y) || (x > 0 && x === 1 - y)) [dx, dy] = [-dy, dx];
@@ -100,6 +109,29 @@ function hslToRgb(h, s, l) {
     }
 
     return {r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255)};
+}
+
+function showMessage(message, time = messageTimeout) {
+    let messageElem = document.createElement("div");
+    messageElem.className = "mandel-message fade-in";
+    messageElem.textContent = message;
+    mandelMessageSubcontainer.prepend(messageElem);
+    mandelMessages.push(messageElem);
+
+    setTimeout(hideMessage, time);
+}
+
+function hideMessage() {
+    if (mandelMessages[0] != null) {
+        let fadeMessage = mandelMessages.shift();
+        fadeMessage.className = "mandel-message fade-out";
+        fadingMandelMessages.push(fadeMessage);
+        setTimeout(removeMessage, fadeTime);
+    }
+}
+
+function removeMessage() {
+    if (fadingMandelMessages[0] != null) fadingMandelMessages.shift().remove();
 }
 
 function getColor(number, maxNumber, colorPalette) {
@@ -139,46 +171,51 @@ function drawSet() {
             let t = drawPoints.shift();
             let message = new WorkerInstructions(t.x, t.y, t.l, t.b, t.rR, t.rI, t.pxW, t.pxH);
             worker.postMessage(message);
+            ++threadsRunning;
         }
     });
 }
 
 function init() {
-    globalElem = document.getElementById("mandelbrot-canvas");
-    globalCtx = globalElem.getContext("2d");
+    mandelElem = document.getElementById("mandelbrot-canvas");
+    mandelCtx = mandelElem.getContext("2d");
 
-    globalElem.addEventListener("mousedown", mouseDownCallback);
-    globalElem.addEventListener("mouseup", mouseUpCallback);
+    mandelControls = document.getElementById("mandel-controls");
+    mandelMessageContainer = document.getElementById("mandel-message-container");
+    mandelMessageSubcontainer = document.getElementById("mandel-message-subcontainer");
+
+    mandelElem.addEventListener("mousedown", mouseDownCallback);
+    mandelElem.addEventListener("mouseup", mouseUpCallback);
 
     leftEdge = -2.25;
     rightEdge = 0.75;
     bottomEdge = -1.5;
     topEdge = 1.5;
 
-    globalElem.width = window.innerWidth;
-    globalElem.height = window.innerHeight;
+    mandelElem.width = window.innerWidth;
+    mandelElem.height = window.innerHeight;
 
-    console.log("Available cores: ", navigator.hardwareConcurrency);
+    showMessage("Available cores: " + navigator.hardwareConcurrency, 1000);
 
-    // globalElem.width = 1000;
-    // globalElem.height = 1000;
+    // mandelElem.width = 1000;
+    // mandelElem.height = 1000;
 
     drawWidthDiff = window.innerWidth % drawWidth;
     drawHeightDiff = window.innerHeight % drawHeight;
 
-    pointsLeft = Math.ceil(globalElem.width / drawWidth);
-    pointsDown = Math.ceil(globalElem.height / drawHeight);
+    pointsLeft = Math.ceil(mandelElem.width / drawWidth);
+    pointsDown = Math.ceil(mandelElem.height / drawHeight);
 
     midReal = (leftEdge + rightEdge) / 2;
     midImaginary = (bottomEdge + topEdge) / 2;
 
-    if (globalElem.width > globalElem.height) {
-        leftEdge = (leftEdge - midReal) * (globalElem.width / globalElem.height) + midReal;
-        rightEdge = (rightEdge - midReal) * (globalElem.width / globalElem.height) + midReal;
+    if (mandelElem.width > mandelElem.height) {
+        leftEdge = (leftEdge - midReal) * (mandelElem.width / mandelElem.height) + midReal;
+        rightEdge = (rightEdge - midReal) * (mandelElem.width / mandelElem.height) + midReal;
     }
-    if (globalElem.height > globalElem.width) {
-        bottomEdge = (bottomEdge - midImaginary) * (globalElem.height / globalElem.width) + midImaginary;
-        topEdge = (topEdge - midImaginary) * (globalElem.height / globalElem.width) + midImaginary;
+    if (mandelElem.height > mandelElem.width) {
+        bottomEdge = (bottomEdge - midImaginary) * (mandelElem.height / mandelElem.width) + midImaginary;
+        topEdge = (topEdge - midImaginary) * (mandelElem.height / mandelElem.width) + midImaginary;
     }
 
     if (workerArray.length > 0) {
@@ -212,6 +249,10 @@ function mouseDownCallback(e) {
 }
 
 function mouseUpCallback(e) {
+    if (mouseDownX == null || mouseDownY == null) {
+        return;
+    }
+
     let newWidthPx = Math.abs(mouseDownX - e.clientX);
     let newHeightPx = Math.abs(mouseDownY - e.clientY);
 
@@ -224,10 +265,10 @@ function mouseUpCallback(e) {
 
     let leftEdgePx = mouseDownX < e.clientX ? mouseDownX : e.clientX;
     let bottomEdgePx = mouseDownY < e.clientY ? mouseDownY : e.clientY;
-    rightEdge = ((leftEdgePx + newWidthPx) / globalElem.width) * realRange + leftEdge;
-    topEdge = ((bottomEdgePx + newHeightPx) / globalElem.height) * imaginaryRange + bottomEdge;
-    leftEdge = (leftEdgePx / globalElem.width) * realRange + leftEdge;
-    bottomEdge = (bottomEdgePx / globalElem.height) * imaginaryRange + bottomEdge;
+    rightEdge = ((leftEdgePx + newWidthPx) / mandelElem.width) * realRange + leftEdge;
+    topEdge = ((bottomEdgePx + newHeightPx) / mandelElem.height) * imaginaryRange + bottomEdge;
+    leftEdge = (leftEdgePx / mandelElem.width) * realRange + leftEdge;
+    bottomEdge = (bottomEdgePx / mandelElem.height) * imaginaryRange + bottomEdge;
 
     realRange = rightEdge - leftEdge;
     imaginaryRange = topEdge - bottomEdge;
@@ -251,6 +292,8 @@ function mouseUpCallback(e) {
         realRange = rightEdge - leftEdge;
     }
 
+    mouseDownX = mouseDownY = null;
+
     drawSet();
 }
 
@@ -263,16 +306,17 @@ let workerCallback = function (e) {
         let message = new WorkerInstructions(t.x, t.y, t.l, t.b, t.rR, t.rI, t.pxW, t.pxH);
         workerArray[d.workerId].postMessage(message);
     } else {
+        --threadsRunning;
+    }
+
+    if (threadsRunning === 0) {
         console.timeEnd("draw");
     }
 
-    let imageData = globalCtx.createImageData(d.pxW, d.pxH);
+    let imageData = mandelCtx.createImageData(d.pxW, d.pxH);
 
     if (d.colored) {
-        // imageData.data = a.slice();
-        // TODO: Find out why I have to loop through for this to work
-        for (let i = 0; i < a.length; ++i) imageData.data[i] = a[i];
-        // console.log(imageData.data, a);
+        imageData.data.set(a);
     } else {
         for (let y = 0; y < d.pxH; ++y) {
             for (let x = 0; x < d.pxW; ++x) {
@@ -287,7 +331,7 @@ let workerCallback = function (e) {
             }
         }
     }
-    globalCtx.putImageData(imageData, d.startX, d.startY);
+    mandelCtx.putImageData(imageData, d.startX, d.startY);
 };
 
 window.addEventListener("load", init, true);
