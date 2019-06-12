@@ -195,7 +195,7 @@ function init() {
     mandelElem.width = window.innerWidth;
     mandelElem.height = window.innerHeight;
 
-    showMessage("Available cores: " + navigator.hardwareConcurrency || "unknown", 1000);
+    showMessage("Available cores: " + (navigator.hardwareConcurrency || "unknown"), 1000);
 
     // mandelElem.width = 1000;
     // mandelElem.height = 1000;
