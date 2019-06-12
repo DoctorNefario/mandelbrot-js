@@ -195,7 +195,7 @@ function init() {
     mandelElem.width = window.innerWidth;
     mandelElem.height = window.innerHeight;
 
-    showMessage("Available cores: " + navigator.hardwareConcurrency, 1000);
+    showMessage("Available cores: " + navigator.hardwareConcurrency || "unknown", 1000);
 
     // mandelElem.width = 1000;
     // mandelElem.height = 1000;
@@ -225,7 +225,7 @@ function init() {
         workerArray = [];
     }
 
-    for (let i = 0; i < navigator.hardwareConcurrency; ++i) {
+    for (let i = 0; i < (navigator.hardwareConcurrency || 4); ++i) {
         workerArray.push(new Worker("mandelbrot-worker.js"));
         workerArray[i].onmessage = workerCallback;
         workerArray[i].postMessage({
